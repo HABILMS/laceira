@@ -1,0 +1,493 @@
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+
+export default function App() {
+  const [currentPage, setCurrentPage] = useState("login");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [newUser, setNewUser] = useState({ name: "", email: "", password: "" });
+  const [products, setProducts] = useState([]);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    description: "",
+    components: "",
+    cost: "",
+    profitMargin: "",
+    image: "",
+  });
+
+  // Carregar usuários do backend
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await axios.get("http://localhost:3001/users");
+        setUsers(res.data);
+      } catch (error) {
+        console.error("Erro ao carregar usuários:", error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  // Carregar produtos do backend
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await axios.get("http://localhost:3001/products");
+        setProducts(res.data);
+      } catch (error) {
+        console.error("Erro ao carregar produtos:", error);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(e.target);
+    const email = formData.get("email");
+    const password = formData.get("password");
+
+    const user = users.find((u) => u.email === email && u.password === password);
+
+    if (user) {
+      setIsLoggedIn(true);
+      setIsAdmin(user.role === "admin");
+      setCurrentPage("dashboard");
+    } else {
+      alert("Email ou senha inválidos.");
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setIsAdmin(false);
+    setCurrentPage("login");
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+
+    if (!newUser.name || !newUser.email || !newUser.password) {
+      alert("Preencha todos os campos.");
+      return;
+    }
+
+    const userAlreadyExists = users.some((user) => user.email === newUser.email);
+    if (userAlreadyExists) {
+      alert("Já existe uma conta com este email.");
+      return;
+    }
+
+    try {
+      const res = await axios.post("http://localhost:3001/users", newUser);
+      setUsers([...users, res.data]);
+      alert("Cadastro realizado com sucesso!");
+      setNewUser({ name: "", email: "", password: "" });
+      setCurrentPage("login");
+    } catch (error) {
+      console.error("Erro ao cadastrar usuário:", error);
+      alert("Não foi possível cadastrar o usuário.");
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewProduct((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleRegisterChange = (e) => {
+    const { name, value } = e.target;
+    setNewUser((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmitProduct = async (e) => {
+    e.preventDefault();
+
+    const sellingPrice =
+      parseFloat(newProduct.cost) *
+      (1 + parseFloat(newProduct.profitMargin) / 100);
+
+    const productToSend = {
+      ...newProduct,
+      sellingPrice: sellingPrice.toFixed(2),
+    };
+
+    try {
+      if (editingProduct) {
+        const res = await axios.put(`http://localhost:3001/products/${editingProduct.id}`, productToSend);
+        setProducts(products.map(p => p.id === editingProduct.id ? res.data : p));
+        setEditingProduct(null);
+      } else {
+        const res = await axios.post("http://localhost:3001/products", productToSend);
+        setProducts([...products, res.data]);
+      }
+
+      setNewProduct({
+        name: "",
+        description: "",
+        components: "",
+        cost: "",
+        profitMargin: "",
+        image: "",
+      });
+    } catch (error) {
+      console.error("Erro ao salvar produto:", error);
+      alert("Não foi possível salvar o produto.");
+    }
+  };
+
+  const calculateSellingPrice = () => {
+    if (!newProduct.cost || !newProduct.profitMargin) return "";
+    const price =
+      parseFloat(newProduct.cost) *
+      (1 + parseFloat(newProduct.profitMargin) / 100);
+    return `R$ ${price.toFixed(2)}`;
+  };
+
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setNewProduct({
+      name: product.name,
+      description: product.description,
+      components: product.components,
+      cost: product.cost,
+      profitMargin: product.profitMargin,
+      image: product.image,
+    });
+  };
+
+  const handleDeleteProduct = async (id) => {
+    if (!window.confirm("Tem certeza que deseja excluir?")) return;
+
+    try {
+      await axios.delete(`http://localhost:3001/products/${id}`);
+      setProducts(products.filter(p => p.id !== id));
+    } catch (error) {
+      console.error("Erro ao deletar produto:", error);
+      alert("Não foi possível excluir o produto.");
+    }
+  };
+
+  const renderLoginForm = () => (
+    <div className="min-h-screen flex items-center justify-center bg-pink-50 px-4">
+      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md animate-fadeIn">
+        <h1 className="text-3xl font-bold text-pink-600 mb-6 text-center">Laceira Dashboard</h1>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-gray-700 mb-1" htmlFor="email">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-1" htmlFor="password">
+              Senha
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200"
+          >
+            Entrar
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Não tem conta?{" "}
+            <button
+              onClick={() => setCurrentPage("register")}
+              className="text-pink-600 font-medium hover:underline"
+            >
+              Cadastre-se
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderRegisterForm = () => (
+    <div className="min-h-screen flex items-center justify-center bg-pink-50 px-4">
+      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md animate-fadeIn">
+        <h1 className="text-3xl font-bold text-pink-600 mb-6 text-center">Cadastre-se</h1>
+        <form onSubmit={handleRegister} className="space-y-4">
+          <div>
+            <label className="block text-gray-700 mb-1" htmlFor="name">
+              Nome Completo
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={newUser.name}
+              onChange={handleRegisterChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-1" htmlFor="email">
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={newUser.email}
+              onChange={handleRegisterChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-1" htmlFor="password">
+              Senha
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={newUser.password}
+              onChange={handleRegisterChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200"
+          >
+            Cadastrar
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Já tem conta?{" "}
+            <button
+              onClick={() => setCurrentPage("login")}
+              className="text-pink-600 font-medium hover:underline"
+            >
+              Fazer Login
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderDashboard = () => (
+    <div className="min-h-screen bg-pink-50">
+      <header className="bg-pink-600 text-white p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Catálogo da Laceira</h1>
+        <button
+          onClick={handleLogout}
+          className="bg-pink-700 hover:bg-pink-800 px-4 py-2 rounded-md transition duration-200"
+        >
+          Sair
+        </button>
+      </header>
+
+      <main className="p-6 space-y-8">
+        <section>
+          <h2 className="text-xl font-semibold text-pink-700 mb-4">
+            {editingProduct ? "Editar Produto" : "Cadastro de Produto"}
+          </h2>
+          <form onSubmit={handleSubmitProduct} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-gray-700 mb-1" htmlFor="name">
+                  Nome do Produto
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={newProduct.name}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 mb-1" htmlFor="image">
+                  URL da Imagem
+                </label>
+                <input
+                  type="url"
+                  id="image"
+                  name="image"
+                  value={newProduct.image}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1" htmlFor="description">
+                Descrição
+              </label>
+              <textarea
+                id="description"
+                name="description"
+                value={newProduct.description}
+                onChange={handleInputChange}
+                rows="3"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                required
+              ></textarea>
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1" htmlFor="components">
+                Componentes para Montagem
+              </label>
+              <textarea
+                id="components"
+                name="components"
+                value={newProduct.components}
+                onChange={handleInputChange}
+                rows="3"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                required
+              ></textarea>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-gray-700 mb-1" htmlFor="cost">
+                  Custo (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  id="cost"
+                  name="cost"
+                  value={newProduct.cost}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 mb-1" htmlFor="profitMargin">
+                  Margem de Lucro (%)
+                </label>
+                <input
+                  type="number"
+                  id="profitMargin"
+                  name="profitMargin"
+                  value={newProduct.profitMargin}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 mb-1">Valor de Venda</label>
+                <input
+                  type="text"
+                  value={calculateSellingPrice()}
+                  readOnly
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="mt-4 bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200"
+            >
+              {editingProduct ? "Atualizar Produto" : "Adicionar Produto"}
+            </button>
+          </form>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold text-pink-700 mb-4">Catálogo de Produtos</h2>
+          {products.length === 0 ? (
+            <p className="text-gray-500">Nenhum produto cadastrado ainda.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {products.map((product) => (
+                <div
+                  key={product.id}
+                  className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition duration-200"
+                >
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-48 object-cover"
+                  />
+                  <div className="p-4">
+                    <h3 className="font-semibold text-lg text-pink-700">{product.name}</h3>
+                    <p className="text-gray-600 text-sm mt-1">{product.description}</p>
+                    <div className="mt-3">
+                      <p className="text-sm text-gray-500">
+                        <span className="font-medium">Componentes:</span> {product.components}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        <span className="font-medium">Custo:</span> R${product.cost}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        <span className="font-medium">Margem de Lucro:</span>{" "}
+                        {product.profitMargin}%
+                      </p>
+                      <p className="text-sm text-green-600 font-medium mt-1">
+                        Valor de Venda: R${product.sellingPrice}
+                      </p>
+                    </div>
+                    <div className="flex justify-between mt-4">
+                      <button
+                        onClick={() => handleEditProduct(product)}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="text-red-600 hover:underline"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+
+  return (
+    <div className="font-sans">
+      {currentPage === "login" && renderLoginForm()}
+      {currentPage === "register" && renderRegisterForm()}
+      {isLoggedIn && currentPage === "dashboard" && renderDashboard()}
+    </div>
+  );
+}
